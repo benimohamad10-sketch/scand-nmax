@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trainer ECU Digital NMAX 155 2019 Non-ABS V1</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --primary: #00ffcc;
+            --danger: #ff4d4d;
+            --warning: #ffcc00;
+            --text-main: #ffffff;
+            --text-muted: #b0b0b0;
+        }
+        body {
+            margin: 0;
+            padding: 15px;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--primary);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .dashboard {
+            width: 100%;
+            max-width: 600px;
+            background: var(--panel-bg);
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+            box-sizing: border-box;
+        }
+        .gauge-section {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+        .rpm-display {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--primary);
+            font-family: monospace;
+        }
+        .label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #btnToggle {
+            background-color: var(--primary);
+            color: #000;
+            grid-column: span 2;
+        }
+        #btnToggle.stop {
+            background-color: var(--danger);
+            color: #fff;
+        }
+        .fault-btn {
+            background-color: #333;
+            color: var(--text-main);
+            border: 1px solid #555;
+        }
+        .fault-btn.active {
+            background-color: var(--warning);
+            color: #000;
+        }
+        .indicators {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+            margin-top: 15px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+        }
+        .indicator {
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .indicator span {
+            display: block;
+            margin-top: 5px;
+            font-weight: bold;
+            color: var(--danger);
+        }
+        .indicator.active span {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Trainer ECU Digital NMAX 155 2019 Non-ABS V1</h1>
+
+    <div class="dashboard">
+        <!-- Tampilan RPM Utama -->
+        <div class="gauge-section">
+            <div class="label">SIMULASI ENGINE SPEED</div>
+            <div class="rpm-display" id="rpmValue">700</div>
+            <div class="label">RPM</div>
+        </div>
+
+        <!-- Kontrol RPM & Simulasi -->
+        <div class="controls">
+            <div class="slider-group">
+                <label for="rpmSlider" class="label">Atur RPM (700 - 5000):</label>
+                <input type="range" id="rpmSlider" min="700" max="5000" step="50" value="700">
+            </div>
+
+            <div class="btn-grid">
+                <button id="btnToggle" onclick="toggleEngine()">START SIMULASI</button>
+                <button class="fault-btn" id="btnTpsFault" onclick="toggleFault('tps')">Gangguan TPS</button>
+                <button class="fault-btn" id="btnIatFault" onclick="toggleFault('iat')">Gangguan IAT</button>
+            </div>
+        </div>
+
+        <!-- Indikator Sensor & Status -->
+        <div class="indicators">
+            <div class="indicator" id="indCkp">
+                Sinyal CKP
+                <span id="txtCkp">OFF</span>
+            </div>
+            <div class="indicator" id="indCmp">
+                Sinyal CMP
+                <span id="txtCmp">OFF</span>
+            </div>
+            <div class="indicator" id="indBat">
+                Tegangan Baterai
+                <span id="txtBat" style="color:var(--primary);">12.6 V</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let tpsError = false;
+        let iatError = false;
+
+        const rpmSlider = document.getElementById('rpmSlider');
+        const rpmValue = document.getElementById('rpmValue');
+        const btnToggle = document.getElementById('btnToggle');
+        
+        const indCkp = document.getElementById('indCkp');
+        const txtCkp = document.getElementById('txtCkp');
+        const indCmp = document.getElementById('indCmp');
+        const txtCmp = document.getElementById('txtCmp');
+        const txtBat = document.getElementById('txtBat');
+
+        rpmSlider.addEventListener('input', function() {
+            if (isRunning) {
+                rpmValue.innerText = this.value;
+                updateVoltage(this.value);
+            }
+        });
+
+        function toggleEngine() {
+            isRunning = !isRunning;
+            if (isRunning) {
+                btnToggle.innerText = "STOP SIMULASI";
+                btnToggle.classList.add("stop");
+                rpmValue.innerText = rpmSlider.value;
+                setIndicatorsActive(true);
+                updateVoltage(rpmSlider.value);
+            } else {
+                btnToggle.innerText = "START SIMULASI";
+                btnToggle.classList.remove("stop");
+                rpmValue.innerText = "0";
+                setIndicatorsActive(false);
+                txtBat.innerText = "12.2 V";
+            }
+        }
+
+        function setIndicatorsActive(active) {
+            if (active) {
+                indCkp.classList.add('active');
+                txtCkp.innerText = "NORMAL";
+                indCmp.classList.add('active');
+                txtCmp.innerText = "NORMAL";
+            } else {
+                indCkp.classList.remove('active');
+                txtCkp.innerText = "OFF";
+                indCmp.classList.remove('active');
+                txtCmp.innerText = "OFF";
+            }
+        }
+
+        function toggleFault(type) {
+            if (!isRunning) return;
+            if (type === 'tps') {
+                tpsError = !tpsError;
+                document.getElementById('btnTpsFault').classList.toggle('active', tpsError);
+                if (tpsError) {
+                    txtCkp.innerText = "ERR (TPS)";
+                    indCkp.classList.remove('active');
+                } else {
+                    txtCkp.innerText = "NORMAL";
+                    indCkp.classList.add('active');
+                }
+            } else if (type === 'iat') {
+                iatError = !iatError;
+                document.getElementById('btnIatFault').classList.toggle('active', iatError);
+            }
+        }
+
+        function updateVoltage(rpm) {
+            // Simulasi pengisian aki naik seiring RPM
+            let voltage = 12.4 + (rpm / 5000) * 1.8;
+            txtBat.innerText = voltage.toFixed(1) + " V";
+        }
+    </script>
+</body>
+</html>
